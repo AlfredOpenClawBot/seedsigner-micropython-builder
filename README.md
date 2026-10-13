@@ -133,6 +133,19 @@ py -m esptool --chip esp32p4 -p COM5 write-flash "@flash_args"
 The write takes about 4 minutes. Three `Deprecated` warnings at the start are harmless. When it
 finishes, the board resets and boots into SeedSigner.
 
+### 6. Try it with test data
+
+[testqrs.com](https://testqrs.com) has step-by-step SeedSigner scenarios built from fake data and
+public demo keys. Open it on your laptop and point the board's camera at the QR codes on your
+screen:
+
+- **Load a seed:** scan a SeedQR (Seeds › Load a seed › Scan).
+- **Sign a transaction:** scan the transaction, load the seed, then review and sign it.
+- **Verify an address:** Tools › Verify Address.
+- **Sign a message:** Tools › Sign Message.
+
+Its keys are public, so use only its test data with this firmware, never a real seed.
+
 ### Troubleshooting
 
 - **`requires chip revision in range ...`**: the download doesn't match your chip; see step 4.
