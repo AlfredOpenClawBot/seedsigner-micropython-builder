@@ -2,6 +2,8 @@
 
 Build orchestration repo for SeedSigner MicroPython firmware without maintaining long-lived forks.
 
+**Just want to put SeedSigner on a board?** Go to [Flash a prebuilt image](#flash-a-prebuilt-image).
+
 ## Supported hardware
 
 | Board | Manufacturer | Screen | Price | Status |
@@ -18,6 +20,123 @@ for per-board specs, enclosure options, and the display / performance difference
 **Chip revision matters.** ESP32-P4 boards switched to chip revision v3.x silicon in 2026, and v3.x
 and the older v1.x chips cannot run the same firmware image. See
 [ESP32-P4 chip revision](#esp32-p4-chip-revision) to pick the right image for your board.
+
+## Flash a prebuilt image
+
+Put SeedSigner on a board from your own laptop (macOS, Linux, or Windows). No build tools are
+needed, just Python and esptool. These steps use the Waveshare 4.3″; the other boards work the
+same way with their own download.
+
+> **Test firmware only.** This is a work-in-progress port. Never use it with a real seed or real
+> funds.
+
+### 1. Install esptool
+
+[esptool](https://github.com/espressif/esptool) is Espressif's flashing tool. You need **esptool
+5.3 or later** (older versions can't flash the v3.2 chips on current boards), which needs Python
+3.10 or later.
+
+**macOS or Linux**, in a terminal. The virtual environment avoids the "externally managed
+environment" error that recent Python installs give for a plain `pip install`:
+
+```bash
+python3 -m venv ~/esptool-venv
+source ~/esptool-venv/bin/activate
+pip install --upgrade esptool
+esptool version
+```
+
+In any new terminal, run `source ~/esptool-venv/bin/activate` again before using esptool.
+
+**Windows**, in PowerShell. If `py --version` fails, first install Python from
+[python.org](https://www.python.org/downloads/).
+
+```powershell
+py -m pip install --upgrade esptool
+py -m esptool version
+```
+
+On Windows, type `py -m esptool` wherever these steps say `esptool`, and `py` wherever they say
+`python`.
+
+### 2. Download the firmware
+
+1. Open the
+   [latest successful build on `main`](https://github.com/kdmukai/seedsigner-micropython-builder/actions/workflows/build-firmware.yml?query=branch%3Amain+is%3Asuccess)
+   and click the newest run. You must be signed in to GitHub to download.
+2. Under **Artifacts**, download `flashable-dist-waveshare-esp32-p4-43`. It is built for ESP32-P4
+   chip revision v3.x, which is what current boards have; step 4 confirms yours.
+3. Unzip it into its own folder. (Your browser may have unzipped it into `Downloads` already.)
+
+### 3. Find your board's serial port
+
+Plug the board into your laptop with a USB-C **data** cable. A charge-only cable powers the board
+but no port appears. Then ask for the board by its USB ID, which is the same on every operating
+system:
+
+```bash
+python -m serial.tools.list_ports 1a86:55d3
+```
+
+That command comes with esptool. It prints one line, which is your board's port:
+
+| OS | Looks like |
+|---|---|
+| macOS | `/dev/cu.usbmodem…` (the matching `/dev/tty.usbmodem…` works too) |
+| Linux | `/dev/ttyACM0` |
+| Windows | `COM5` (the number varies) |
+
+If it prints `no ports found`:
+
+- Try another cable or USB port.
+- On Windows, check Device Manager under **Ports (COM & LPT)**. If no new port appears when you
+  plug the board in, install WCH's CH343 driver (the `CH343SER` package from wch-ic.com).
+- For a board other than the Waveshare 4.3″ (different USB ID), run
+  `python -m serial.tools.list_ports -v` before and after plugging it in; the new entry is the
+  board.
+
+On Linux, if a later step reports permission denied on the port, run
+`sudo usermod -aG dialout $USER` and log out and back in. For a quick fix that lasts until you
+unplug the board, run `sudo chmod a+rw /dev/ttyACM0` instead.
+
+### 4. Check the chip revision
+
+Replace `<port>` with your port from step 3:
+
+```bash
+esptool -p <port> chip-id
+```
+
+Look for the `Chip type` line. It should say `ESP32-P4 (revision v3.x)`, such as
+`ESP32-P4 (revision v3.2)`, which matches the download from step 2. If it shows a different
+revision, stop here and see [ESP32-P4 chip revision](#esp32-p4-chip-revision).
+
+### 5. Flash
+
+From inside the unzipped folder (the one that contains `flash_args`):
+
+```bash
+esptool --chip esp32p4 -p <port> write-flash @flash_args
+```
+
+In Windows PowerShell, put quotes around `@flash_args`, because PowerShell treats a bare `@`
+specially:
+
+```powershell
+py -m esptool --chip esp32p4 -p COM5 write-flash "@flash_args"
+```
+
+The write takes about 4 minutes. Three `Deprecated` warnings at the start are harmless. When it
+finishes, the board resets and boots into SeedSigner.
+
+### Troubleshooting
+
+- **`requires chip revision in range ...`**: the download doesn't match your chip; see step 4.
+- **`Failed to connect`**: close anything else using the port (a serial monitor, another
+  esptool), unplug and replug the board, and try again.
+- **`esptool: command not found`**: on macOS or Linux, run
+  `source ~/esptool-venv/bin/activate`; on Windows, use `py -m esptool`.
+- **No port found**: see step 3.
 
 ## Repository roles
 
@@ -213,9 +332,9 @@ There are two ways to get a flashable image.
 
 **1. Download a prebuilt image (easiest).** On merge to `main`, CI publishes a **`flashable-dist-*`**
 artifact for each of the three supported ESP32-P4 boards: the Waveshare 4.3″ (primary), the Guition
-JC4880P443, and the Waveshare 3.5″ (see [CI](#ci)). Download and unzip the one for your board and
-chip revision (see [below](#esp32-p4-chip-revision)). It contains the same `dist/<BOARD>/` layout as
-below and self-boots; skip to [flashing](#flashing).
+JC4880P443, and the Waveshare 3.5″ (see [CI](#ci)). It contains the same `dist/<BOARD>/` layout as
+below and self-boots. [Flash a prebuilt image](#flash-a-prebuilt-image) walks through downloading
+and flashing it.
 
 **2. Build it yourself.** Once the submodules are set up (see
 [Cloning and submodule setup](#cloning-and-submodule-setup)), building a flashable image is two
@@ -254,9 +373,10 @@ v3.2)`. Recent esptool versions also refuse to write a bootloader built for the 
 Background and the v3-specific fixes:
 [docs/knowledge/esp32-p4-chip-revision-v3.md](docs/knowledge/esp32-p4-chip-revision-v3.md).
 
-### Flashing
+### Flashing your own build
 
-Flashing runs on your **host**, not in the build container (it needs USB access to the board), so
+The steps in [Flash a prebuilt image](#flash-a-prebuilt-image) (finding the port, checking the chip
+revision) apply to your own builds too. Flashing runs on your **host**, not in the build container (it needs USB access to the board), so
 install the host-side Python tools first: `esptool` (the flasher) and `pyserial` (used by the
 `tools/` provisioning scripts). With Python 3:
 
@@ -270,7 +390,7 @@ Flash from `dist/<BOARD>/`, using the generated offsets:
 
 ```bash
 cd dist/WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43
-python -m esptool --chip esp32p4 --port /dev/ttyACM0 write-flash @flash_args
+python -m esptool --chip esp32p4 --port <port> write-flash @flash_args
 ```
 
 **Safety:**
@@ -289,7 +409,7 @@ The exception is a **firmware-only** package (`BAKE_LAUNCHER=0 make dist`, or fl
 serial with:
 
 ```bash
-python3 tools/set_p4_boot_app.py --port /dev/ttyACM0
+python3 tools/set_p4_boot_app.py --port <port>
 ```
 
 
