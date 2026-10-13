@@ -7,5 +7,6 @@
 # The build toolchain itself (ESP-IDF, mpy-cross) stays containerized and is not
 # listed here -- see the README "Prebuilt base image" section.
 
-esptool         # writes firmware over serial: `python -m esptool ... write_flash @flash_args`
+esptool>=5.3    # flashes firmware: `python -m esptool ... write-flash @flash_args`
+                # (5.3+ flashes every ESP32-P4 v3.x revision so far, up to v3.2)
 pyserial>=3.5   # tools/ serial provisioning helpers (e.g. set_p4_boot_app.py) import `serial`

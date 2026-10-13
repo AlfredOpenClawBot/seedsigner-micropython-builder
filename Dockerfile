@@ -1,7 +1,9 @@
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ARG ESP_IDF_REF=v5.5.1
+# ESP32-P4 chip revision v3.x (the silicon now shipping on P4 boards) needs ESP-IDF
+# v5.5.3 or later; earlier releases can only build for revisions up to v1.99.
+ARG ESP_IDF_REF=v5.5.5
 ENV IDF_TOOLS_PATH=/opt/espressif
 
 RUN apt-get update && apt-get install -y \

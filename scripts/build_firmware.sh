@@ -17,7 +17,13 @@ if [ -z "$IDF_DIR" ]; then
 fi
 
 BOARD="${BOARD:-WAVESHARE_ESP32_S3_TOUCH_LCD_35B}"
-BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build/$BOARD}"
+# Optional MicroPython board variant (the board's mpconfigvariant_<VARIANT>.cmake).
+# ESP32-P4 boards use it to pick the silicon family: the default build targets chip
+# revision v3.x, and BOARD_VARIANT=PRE_REV3 targets the older v0.x/v1.x chips. The two
+# families cannot run the same image, so each variant gets its own build dir.
+BOARD_VARIANT="${BOARD_VARIANT:-}"
+BUILD_NAME="$BOARD${BOARD_VARIANT:+-$BOARD_VARIANT}"
+BUILD_DIR="${BUILD_DIR:-$ROOT_DIR/build/$BUILD_NAME}"
 LOGS_DIR="${LOGS_DIR:-$ROOT_DIR/logs}"
 
 if [ ! -e "$MP_DIR/.git" ]; then
@@ -35,7 +41,7 @@ fi
 
 mkdir -p "$BUILD_DIR" "$LOGS_DIR"
 TS="$(date -u +%Y-%m-%d_%H%M%SZ)"
-BUILD_LOG="$LOGS_DIR/${TS}-build-${BOARD}.log"
+BUILD_LOG="$LOGS_DIR/${TS}-build-${BUILD_NAME}.log"
 
 echo "Build log: $BUILD_LOG"
 
@@ -52,6 +58,26 @@ export IDF_PATH="$IDF_DIR"
 source "$IDF_PATH/export.sh"
 idf.py --version >/dev/null 2>&1 || { echo "ERROR: idf.py not runnable (GHCR base image ESP-IDF toolchain missing/broken)"; exit 1; }
 
+# ESP32-P4 chip revision v3.x needs ESP-IDF v5.5.3 or later. An older IDF does not
+# know the v3 Kconfig symbols, drops them without a word, and produces an image capped
+# at revision v1.99 that the bootloader refuses to run on a v3 chip. Catch that here,
+# before the long compile; the resolved-sdkconfig check after the build is the
+# authoritative one.
+IDF_TARGET_NAME="$(sed -n 's/^set(IDF_TARGET \([a-z0-9]*\))/\1/p' \
+  "$MP_DIR/ports/esp32/boards/$BOARD/mpconfigboard.cmake" 2>/dev/null | head -1)"
+idf_version_part() {
+  sed -n "s/^set(IDF_VERSION_$1 \([0-9]*\))/\1/p" "$IDF_PATH/tools/cmake/version.cmake"
+}
+IDF_VERSION_STR="$(idf_version_part MAJOR).$(idf_version_part MINOR).$(idf_version_part PATCH)"
+IDF_VERSION_NUM=$(( $(idf_version_part MAJOR) * 10000 + $(idf_version_part MINOR) * 100 + $(idf_version_part PATCH) ))
+if [ "$IDF_TARGET_NAME" = "esp32p4" ] && [ "$BOARD_VARIANT" != "PRE_REV3" ] \
+    && [ "$IDF_VERSION_NUM" -lt 50503 ]; then
+  echo "ERROR: ESP-IDF v$IDF_VERSION_STR cannot target ESP32-P4 chip revision v3.x (needs v5.5.3+)."
+  echo "  Use a base image built with a newer ESP_IDF_REF (see README-dev.md), or build"
+  echo "  for the older silicon with BOARD_VARIANT=PRE_REV3."
+  exit 1
+fi
+
 PORTS_ESP32_DIR="$ROOT_DIR/ports/esp32"
 USER_C_MODULES_FILE="$ROOT_DIR/usercmodule.cmake"
 MICROPY_CMAKE_ARGS="${CMAKE_ARGS:-} -DUSER_C_MODULES=$USER_C_MODULES_FILE"
@@ -67,12 +93,12 @@ MICROPY_CMAKE_ARGS="${CMAKE_ARGS:-} -DUSER_C_MODULES=$USER_C_MODULES_FILE"
 # (see below), NOT for the `submodules` reconfigure. That throwaway pass is
 # what fetches the managed components, and the strip's EXCLUDE_COMPONENTS can
 # only resolve once apply_component_patches.sh has patched tinyusb to drop
-# its esp_netif requirement — patching requires the component to have been
+# its esp_netif requirement, and patching requires the component to have been
 # fetched first. Order: fetch (unstripped) -> patch -> real build (stripped).
 MP_DISABLE_NETWORK="${MP_DISABLE_NETWORK:-1}"
 unset MICROPY_DISABLE_NETWORK
 # Component search path. Includes board_common's nested camera components so that
-# board_common's REQUIRES (esp-camera-pipeline, cam_pipeline_qr) resolve — same set
+# board_common's REQUIRES (esp-camera-pipeline, cam_pipeline_qr) resolve: the same set
 # the board_common apps (scan_coord_test, qr_overlay_test) point EXTRA_COMPONENT_DIRS at.
 BOARD_COMMON_COMPONENTS="${PORTS_ESP32_DIR}/board_common/components"
 MICROPY_EXTRA_DIRS="${PORTS_ESP32_DIR}"
@@ -82,12 +108,12 @@ MICROPY_EXTRA_DIRS="${MICROPY_EXTRA_DIRS}\;${BOARD_COMMON_COMPONENTS}/esp-camera
 MICROPY_EXTRA_DIRS="${MICROPY_EXTRA_DIRS}\;${SCREENS_DIR}/components"
 # cUR: native BC-UR (fountain) decoder as a plain IDF component (dir name -> component `cUR`).
 # The uUR.c MicroPython binding is compiled in usermod (bindings/micropython.cmake) and
-# links __idf_cUR — same plain-C-lib split as camera_scanner/k_quirc.
+# links __idf_cUR (the same plain-C-lib split as camera_scanner/k_quirc).
 MICROPY_EXTRA_DIRS="${MICROPY_EXTRA_DIRS}\;${WORKDIR}/cUR"
 # esp-secp256k1: native libsecp256k1 (ElementsProject/secp256k1-zkp) as a plain IDF
 # component (dir name -> component `esp-secp256k1`). The modsecp256k1.c MicroPython
 # binding is compiled in usermod (bindings/micropython.cmake) and links
-# __idf_esp-secp256k1 — same plain-C-lib split as cUR/camera_scanner.
+# __idf_esp-secp256k1 (the same plain-C-lib split as cUR/camera_scanner).
 MICROPY_EXTRA_DIRS="${MICROPY_EXTRA_DIRS}\;${WORKDIR}/esp-secp256k1"
 # esp-hashlib-ext: mbedtls-backed SHA-512 + PBKDF2 for hashlib (dir name -> component
 # `esp-hashlib-ext`). The modhashlibext.c binding is compiled in usermod and links
@@ -161,6 +187,7 @@ fi
   # reconfigure sees our components/board config. Idempotent on full clones.
   make -C "$MP_DIR/ports/esp32" \
     BOARD="$BOARD" \
+    ${BOARD_VARIANT:+BOARD_VARIANT="$BOARD_VARIANT"} \
     BUILD="$BUILD_DIR" \
     USER_C_MODULES="$USER_C_MODULES_FILE" \
     CMAKE_ARGS="$MICROPY_CMAKE_ARGS" \
@@ -174,7 +201,7 @@ fi
   "$SCRIPT_DIR/apply_component_patches.sh" "$WORKDIR"
 
   # Activate the network strip for the REAL build only (the submodules
-  # reconfigure above must run unstripped — see the MP_DISABLE_NETWORK note).
+  # reconfigure above must run unstripped; see the MP_DISABLE_NETWORK note).
   # Both the -D and the env var are needed: ESP-IDF's early component
   # expansion evaluates component CMakeLists in script mode, where -D cache
   # variables don't exist but the environment does. Without the env var the
@@ -186,6 +213,7 @@ fi
 
   make -C "$MP_DIR/ports/esp32" -j"$(nproc)" \
     BOARD="$BOARD" \
+    ${BOARD_VARIANT:+BOARD_VARIANT="$BOARD_VARIANT"} \
     BUILD="$BUILD_DIR" \
     USER_C_MODULES="$USER_C_MODULES_FILE" \
     CMAKE_ARGS="$MICROPY_CMAKE_ARGS" \
@@ -195,6 +223,27 @@ fi
   if ! grep -Rqs "usercmodule.cmake" "$BUILD_DIR"/CMakeCache.txt "$BUILD_DIR"/esp-idf/main/CMakeFiles 2>/dev/null; then
     echo "ERROR: USER_C_MODULES not detected in build metadata (expected $USER_C_MODULES_FILE)."
     exit 1
+  fi
+
+  # Confirm the image targets the intended ESP32-P4 silicon family. Read the RESOLVED
+  # sdkconfig, not the fragments: an IDF that does not know a revision symbol drops it
+  # and falls back to its own default, which still builds cleanly.
+  CHIP_REV_RANGE=""
+  if [ "$IDF_TARGET_NAME" = "esp32p4" ]; then
+    rev_min="$(sed -n 's/^CONFIG_ESP_REV_MIN_FULL=//p' "$BUILD_DIR/sdkconfig")"; rev_min="${rev_min:-0}"
+    rev_max="$(sed -n 's/^CONFIG_ESP_REV_MAX_FULL=//p' "$BUILD_DIR/sdkconfig")"; rev_max="${rev_max:-0}"
+    CHIP_REV_RANGE="v$((rev_min / 100)).$((rev_min % 100)) to v$((rev_max / 100)).$((rev_max % 100))"
+    if [ "$BOARD_VARIANT" = "PRE_REV3" ]; then
+      rev_ok=$(( rev_max == 199 ))
+    else
+      rev_ok=$(( rev_min == 300 && rev_max == 399 ))
+    fi
+    if [ "$rev_ok" != "1" ]; then
+      echo "ERROR: $BUILD_NAME resolved to ESP32-P4 chip revisions $CHIP_REV_RANGE (ESP-IDF v$IDF_VERSION_STR)."
+      echo "  Expected v3.0 to v3.99 for the default build, or a v1.99 ceiling for PRE_REV3."
+      exit 1
+    fi
+    echo "Targets ESP32-P4 chip revisions $CHIP_REV_RANGE"
   fi
 
   echo "Build complete. Artifacts:"
@@ -216,6 +265,9 @@ fi
     *)                  CHIP_TYPE="esp32s3" ;;
   esac
   echo "  Flash with: python -m esptool --chip $CHIP_TYPE write_flash @flash_args"
+  if [ -n "$CHIP_REV_RANGE" ]; then
+    echo "  Only for ESP32-P4 chip revisions $CHIP_REV_RANGE (esptool prints the chip revision on connect)"
+  fi
   ls -lhR "$FLASH_DIR"
 } 2>&1 | tee "$BUILD_LOG"
 

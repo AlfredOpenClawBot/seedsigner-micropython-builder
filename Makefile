@@ -1,13 +1,14 @@
 .PHONY: docker-shell stage-app docker-build-all dist clean clean-purge-cache full-reset
 
-# Local dev uses the same prebaked GHCR image as CI.
-# Override IMAGE if you need a pinned tag.
-IMAGE ?= ghcr.io/kdmukai-bot/seedsigner-micropython-builder-base:latest
+# Local dev uses the same prebaked GHCR image as CI, pinned to the ESP-IDF baseline tag so
+# it moves in step with ESP_IDF_REF in the Dockerfile. Override IMAGE to use another tag.
+IMAGE ?= ghcr.io/kdmukai-bot/seedsigner-micropython-builder-base:idf-v5.5.5
 
 DOCKER_RUN = docker run --rm \
 	--user $(shell id -u):$(shell id -g) \
 	-e HOME=/tmp/home \
 	$(if $(BOARD),-e BOARD=$(BOARD)) \
+	$(if $(BOARD_VARIANT),-e BOARD_VARIANT=$(BOARD_VARIANT)) \
 	$(if $(MP_ALLOW_DIRTY),-e MP_ALLOW_DIRTY=$(MP_ALLOW_DIRTY)) \
 	$(if $(PROFILE),-e PROFILE=$(PROFILE)) \
 	$(if $(MP_DISABLE_NETWORK),-e MP_DISABLE_NETWORK=$(MP_DISABLE_NETWORK)) \
@@ -38,7 +39,12 @@ docker-build-all: stage-app
 # Package flash-ready binaries into dist/<BOARD>/ for easy flashing.
 # Requires a prior docker-build-all (or BOARD= docker-build-all) to produce artifacts.
 BOARD ?= WAVESHARE_ESP32_S3_TOUCH_LCD_35B
-DIST_DIR = dist/$(BOARD)
+# BOARD_VARIANT selects a MicroPython board variant. ESP32-P4 boards build for chip
+# revision v3.x by default; BOARD_VARIANT=PRE_REV3 builds for the older v0.x/v1.x
+# silicon. A variant builds into build/<BOARD>-<VARIANT>/ and packages into
+# dist/<BOARD>-<VARIANT>/, so the two images never overwrite each other.
+BUILD_NAME = $(BOARD)$(if $(BOARD_VARIANT),-$(BOARD_VARIANT))
+DIST_DIR = dist/$(BUILD_NAME)
 
 # BAKE_LAUNCHER=0 skips the /main.py launcher bake (firmware-only dist that boots to
 # the REPL until a launcher is written; only useful for an app-less build).
@@ -51,16 +57,16 @@ BAKE_LAUNCHER ?= 1
 BAKE_PACKS ?= 1
 
 dist:
-	@if [ ! -f build/$(BOARD)/flash_args ]; then \
-		echo "ERROR: No build artifacts for BOARD=$(BOARD). Run: make docker-build-all"; \
+	@if [ ! -f build/$(BUILD_NAME)/flash_args ]; then \
+		echo "ERROR: No build artifacts in build/$(BUILD_NAME). Run: make docker-build-all"; \
 		exit 1; \
 	fi
 	rm -rf $(DIST_DIR)
 	mkdir -p $(DIST_DIR)/bootloader $(DIST_DIR)/partition_table
-	cp build/$(BOARD)/flash_args $(DIST_DIR)/
-	cp build/$(BOARD)/micropython.bin $(DIST_DIR)/
-	cp build/$(BOARD)/bootloader/bootloader.bin $(DIST_DIR)/bootloader/
-	cp build/$(BOARD)/partition_table/partition-table.bin $(DIST_DIR)/partition_table/
+	cp build/$(BUILD_NAME)/flash_args $(DIST_DIR)/
+	cp build/$(BUILD_NAME)/micropython.bin $(DIST_DIR)/
+	cp build/$(BUILD_NAME)/bootloader/bootloader.bin $(DIST_DIR)/bootloader/
+	cp build/$(BUILD_NAME)/partition_table/partition-table.bin $(DIST_DIR)/partition_table/
 	@# Bake the frozen-app launcher (/main.py) + language packs (/lang-packs/<locale>/...)
 	@# into a littlefs2 image for the auto-vfs partition so a fresh flash of this dist boots
 	@# the app, fully localized, with no microSD. Geometry is derived from the built
@@ -69,7 +75,7 @@ dist:
 	@if [ "$(BAKE_LAUNCHER)" = "1" ]; then \
 		if [ "$(BAKE_PACKS)" = "1" ]; then PACKS_ARG=""; else PACKS_ARG="--no-packs"; fi; \
 		python3 tools/build_launcher_fs.py --board $(BOARD) \
-			--build-dir build/$(BOARD) --dist-dir $(DIST_DIR) $$PACKS_ARG; \
+			--build-dir build/$(BUILD_NAME) --dist-dir $(DIST_DIR) $$PACKS_ARG; \
 	else \
 		echo "[dist] BAKE_LAUNCHER=0 -> firmware-only dist (no /main.py; boots to REPL)"; \
 	fi
