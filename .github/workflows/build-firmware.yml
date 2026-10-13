@@ -91,6 +91,9 @@ jobs:
 
   build:
     needs: [resolve-image-owner, build-packs]
+    # build-packs runs only on push. GitHub skips a job whose dependency was skipped, so
+    # without this every pull request would skip the firmware build and still pass.
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
     # Build every supported ESP32-P4 board. All three are esp32p4 (RISC-V), so
     # they share the toolchain installed below; only the board definition differs.
