@@ -61,12 +61,16 @@ On Windows, type `py -m esptool` wherever these steps say `esptool`, and `py` wh
 
 ### 2. Download the firmware
 
-1. Open the
-   [latest successful build on `main`](https://github.com/kdmukai/seedsigner-micropython-builder/actions/workflows/build-firmware.yml?query=branch%3Amain+is%3Asuccess)
-   and click the newest run. You must be signed in to GitHub to download.
-2. Under **Artifacts**, download `flashable-dist-waveshare-esp32-p4-43`. It is built for ESP32-P4
-   chip revision v3.x, which is what current boards have; step 4 confirms yours.
-3. Unzip it into its own folder. (Your browser may have unzipped it into `Downloads` already.)
+1. Open the [Releases page](https://github.com/kdmukai/seedsigner-micropython-builder/releases).
+   Under the newest release's **Assets**, download `flashable-dist-waveshare-esp32-p4-43.zip`.
+   No GitHub account is needed. It is built for ESP32-P4 chip revision v3.x, which is what
+   current boards have; step 4 confirms yours.
+2. Unzip it into its own folder. (Your browser may have unzipped it into `Downloads` already.)
+
+For a build newer than the latest release, signed-in GitHub users can download the same artifact
+from the
+[latest successful build on `main`](https://github.com/kdmukai/seedsigner-micropython-builder/actions/workflows/build-firmware.yml?query=branch%3Amain+is%3Asuccess)
+under **Artifacts**.
 
 ### 3. Find your board's serial port
 
