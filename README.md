@@ -10,19 +10,23 @@ Build orchestration repo for SeedSigner MicroPython firmware without maintaining
 | [JC4880P443](https://www.aliexpress.us/item/3256809431944589.html) | Guition | 4.3″ | $35 | ✅ Supported |
 | [ESP32-P4-WIFI6-Touch-LCD-3.5](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.5.htm) | Waveshare | 3.5″ | [$38](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.5.htm?sku=33511) | ✅ Supported |
 | [ESP32-P4-WIFI6-Touch-LCD-5](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-5.htm) | Waveshare | 5″ | [$53](https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-5.htm?sku=33763) | 🚧 Planned |
-| [ESP32-S3-Touch-LCD-3.5B](https://www.waveshare.com/esp32-s3-touch-lcd-3.5b.htm) | Waveshare | 3.5″ | — | 🔬 Under evaluation |
+| [ESP32-S3-Touch-LCD-3.5B](https://www.waveshare.com/esp32-s3-touch-lcd-3.5b.htm) | Waveshare | 3.5″ | n/a | 🔬 Under evaluation |
 
 Prices are list prices as of July 2026. See **[Board hardware details](docs/supported-hardware.md)**
 for per-board specs, enclosure options, and the display / performance differences.
 
+**Chip revision matters.** ESP32-P4 boards switched to chip revision v3.x silicon in 2026, and v3.x
+and the older v1.x chips cannot run the same firmware image. See
+[ESP32-P4 chip revision](#esp32-p4-chip-revision) to pick the right image for your board.
+
 ## Repository roles
 
-- `deps/micropython/mods/` — overlay + patch set for MicroPython
-- `deps/esp-idf/mods/` — overlay + patch set for ESP-IDF (placeholder)
-- `ports/esp32/` — ESP32-specific hardware components (display, camera, power, BSP)
-- `bindings/` — MicroPython C module bindings
-- `scripts/` — shared setup/apply/build scripts used by both CI and local dev
-- `.github/workflows/` — CI workflow that runs the same scripts
+- `deps/micropython/mods/`: overlay + patch set for MicroPython
+- `deps/esp-idf/mods/`: overlay + patch set for ESP-IDF (placeholder)
+- `ports/esp32/`: ESP32-specific hardware components (display, camera, power, BSP)
+- `bindings/`: MicroPython C module bindings
+- `scripts/`: shared setup/apply/build scripts used by both CI and local dev
+- `.github/workflows/`: CI workflow that runs the same scripts
 
 ## Cloning and submodule setup
 
@@ -36,7 +40,7 @@ git submodule update --init --recursive \
     deps/micropython/upstream deps/seedsigner-lvgl-screens \
     deps/cUR deps/esp-secp256k1 ports/esp32/board_common
 
-# Frozen-app sources, NON-recursively — the app + embit are frozen into the image.
+# Frozen-app sources, NON-recursively: the app + embit are frozen into the image.
 # Their own nested submodules (translations, screenshots) aren't needed: the freeze
 # excludes resources/, so skip the recursion (and the large translations clone).
 git submodule update --init deps/seedsigner deps/embit
@@ -44,7 +48,7 @@ git submodule update --init deps/seedsigner deps/embit
 
 `--recursive` is required for `seedsigner-lvgl-screens` (its own LVGL submodule) and
 `micropython` (micropython-lib). The app (`deps/seedsigner`) and `embit` (`deps/embit`) are
-the sources frozen into the firmware — init them non-recursively.
+the sources frozen into the firmware, so init them non-recursively.
 
 > Quick-and-dirty: a plain `git submodule update --init --recursive` from the repo root also
 > works, but additionally clones the app's `seedsigner-translations` submodule, which the
@@ -55,11 +59,11 @@ the sources frozen into the firmware — init them non-recursively.
 The `deps/` directory holds the external source trees needed for the build. They are
 managed differently because they play different roles.
 
-### `deps/seedsigner-lvgl-screens` — git submodule (version-pinned)
+### `deps/seedsigner-lvgl-screens`: git submodule (version-pinned)
 
 This is the project's shared C module code (LVGL screens, navigation). It
 is tracked as a **git submodule** so the builder repo records exactly which commit is
-known-good. The build uses it as-is — no patches are applied.
+known-good. The build uses it as-is; no patches are applied.
 
 - **Local:** populated by `git submodule update --init --recursive`
 - **CI:** populated by `actions/checkout` with `submodules: true`
@@ -67,7 +71,7 @@ known-good. The build uses it as-is — no patches are applied.
 - **Override:** `workflow_dispatch` accepts an optional `screens_ref` input to test a
   different branch/tag/SHA without changing the pin
 
-### `deps/micropython/upstream` — patched build workspace (a pinned submodule)
+### `deps/micropython/upstream`: patched build workspace (a pinned submodule)
 
 MicroPython is a pinned git submodule that gets **patched and mutated** during every build.
 The build starts from the clean pinned snapshot, applies the patch series from
@@ -76,7 +80,7 @@ partition tables) from `deps/micropython/mods/new_files/`, and compiles the
 result. The patch + overlay are committed inside the submodule as a single
 `seedsigner-builder: applied patch …` commit (nested `lib/` submodules are
 excluded from it). A clean `make docker-build-all` restores the submodule to its
-pinned commit on exit — preserving `lib/` submodules — so the submodule pointer,
+pinned commit on exit (preserving `lib/` submodules), so the submodule pointer,
 not the mutated tree, is the source of truth.
 
 - **Local:** populated by `git submodule update --init --recursive`.
@@ -87,14 +91,14 @@ not the mutated tree, is the source of truth.
   `apply_micropython_mods.sh` skips repatching and uses your current tree. This lets you
   edit MicroPython source directly and iterate without the patch step overwriting your work.
 
-### `deps/seedsigner` + `deps/embit` — frozen-app sources (branch-tracked submodules)
+### `deps/seedsigner` + `deps/embit`: frozen-app sources (branch-tracked submodules)
 
 The SeedSigner app and `embit` are frozen into the firmware, so they are tracked as submodules
 to give the build a deterministic, CI-clonable source:
 
 - `deps/seedsigner` → `kdmukAI-bot/seedsigner`, tracking `integration/lvgl-mpy`.
-- `deps/embit` → `kdmukAI-bot/embit`, tracking `perf/psbt-parse-speedups-v0.8.0` (embit v0.8.0 —
-  the version the app's `requirements.txt` pins — plus a BIP32 derivation-hot-path perf commit).
+- `deps/embit` → `kdmukAI-bot/embit`, tracking `perf/psbt-parse-speedups-v0.8.0` (embit v0.8.0,
+  the version the app's `requirements.txt` pins, plus a BIP32 derivation-hot-path perf commit).
 
 Both carry a `branch =` in `.gitmodules`, so the pin follows a branch tip rather than a frozen
 commit. Advance a pin to its current tip with:
@@ -107,7 +111,7 @@ git add deps/seedsigner && git commit -m "bump app pin"
 **Local dev builds off your sibling working trees, not these submodules.** The stager
 (`tools/stage_frozen_app.py`) resolves the app + embit source via `tools/_devenv` (`SS_APP_DIR` /
 `SS_EMBIT_DIR`, `.env`-overridable), defaulting to the sibling checkouts `../seedsigner` and
-`../embit` — so you iterate on your live tree. CI points those env vars at these submodules for a
+`../embit`, so you iterate on your live tree. CI points those env vars at these submodules for a
 reproducible build. See [README-dev.md](README-dev.md#frozen-app-build--versioning).
 
 ### Why the difference?
@@ -115,11 +119,11 @@ reproducible build. See [README-dev.md](README-dev.md#frozen-app-build--versioni
 | | `seedsigner-lvgl-screens` | `micropython` |
 |---|---|---|
 | Ownership | Project-owned code | Upstream dependency |
-| Modified during build? | No — used as-is | Yes — patched + overlaid |
+| Modified during build? | No, used as-is | Yes, patched + overlaid |
 | Version tracking | Submodule commit pointer | Submodule commit pointer + `BASELINE` file |
 | Working tree after build | Clean | Patched during build, restored to pinned after a clean build |
 
-A submodule implies a stable, tracked pointer — which makes sense for lvgl-screens but not for
+A submodule implies a stable, tracked pointer, which makes sense for lvgl-screens but not for
 a tree that is immediately mutated. MicroPython's version is pinned in the Docker base image
 and the `BASELINE` file instead.
 
@@ -156,7 +160,7 @@ Notes on default behavior:
 - **Auto-stages the frozen app.** `docker-build-all` depends on `make stage-app`, which mirrors
   the app + embit into `frozen_app/` and bakes the version before the container build freezes it
   (see [README-dev.md](README-dev.md#frozen-app-build--versioning)). Staging fails clearly if the
-  app/embit sources aren't found — set `SS_APP_DIR` / `SS_EMBIT_DIR` (or `.env`), or init the
+  app/embit sources aren't found; set `SS_APP_DIR` / `SS_EMBIT_DIR` (or `.env`), or init the
   `deps/seedsigner` + `deps/embit` submodules.
 - First run: initialize submodules (see [Cloning and submodule setup](#cloning-and-submodule-setup)) if `deps/micropython/upstream` is empty.
 - Subsequent runs: if `deps/micropython/upstream` is dirty, the build uses your current working tree and skips repatching.
@@ -169,18 +173,21 @@ CI checks out this repo with `submodules: true` (populating `seedsigner-lvgl-scr
 `deps/micropython/upstream` at their pinned commits), applies mods, builds firmware, and
 uploads artifacts.
 
-**Pull requests** run a fast compile-only firmware check for all three supported ESP32-P4 boards —
+**Pull requests** run a fast compile-only firmware check for all three supported ESP32-P4 boards:
 the Waveshare 4.3″, the Guition JC4880P443, and the Waveshare 3.5″ (the app is not frozen in). **On
 merge to `main`**, GitHub CI additionally stages the frozen app from the pinned `deps/seedsigner` /
 `deps/embit` submodules, builds it in, and publishes a downloadable **`flashable-dist-*`** artifact
-for each — self-booting images anyone can flash (see below). GitLab / Codeberg build the ESP32-S3 dev
+for each: self-booting images anyone can flash (see below). These target ESP32-P4 chip revision
+v3.x; the Waveshare 4.3″ also gets a `flashable-dist-waveshare-esp32-p4-43-pre-rev3` build for
+boards with the older v1.x silicon. GitLab / Codeberg build the ESP32-S3 dev
 boards and skip the frozen-app bake for now.
 
 
 ## Build outputs
 
-- Firmware build directory (default): `build/<BOARD>/`
-- Flash-ready package (from `make dist`): `dist/<BOARD>/`
+- Firmware build directory (default): `build/<BOARD>/` (`build/<BOARD>-<VARIANT>/` for a
+  `BOARD_VARIANT` build)
+- Flash-ready package (from `make dist`): `dist/<BOARD>/` (`dist/<BOARD>-<VARIANT>/`)
 - Staged frozen app (gitignored, regenerated by `make stage-app`): `frozen_app/`
 - Build logs (default): `logs/`
 
@@ -205,13 +212,14 @@ Logs are written under `logs/` with timestamp-first naming.
 There are two ways to get a flashable image.
 
 **1. Download a prebuilt image (easiest).** On merge to `main`, CI publishes a **`flashable-dist-*`**
-artifact for each of the three supported ESP32-P4 boards — the Waveshare 4.3″ (primary), the Guition
-JC4880P443, and the Waveshare 3.5″ (see [CI](#ci)). Download and unzip the one for your board — it
-contains the same `dist/<BOARD>/` layout as below and self-boots — then skip to [flashing](#flashing).
+artifact for each of the three supported ESP32-P4 boards: the Waveshare 4.3″ (primary), the Guition
+JC4880P443, and the Waveshare 3.5″ (see [CI](#ci)). Download and unzip the one for your board and
+chip revision (see [below](#esp32-p4-chip-revision)). It contains the same `dist/<BOARD>/` layout as
+below and self-boots; skip to [flashing](#flashing).
 
 **2. Build it yourself.** Once the submodules are set up (see
 [Cloning and submodule setup](#cloning-and-submodule-setup)), building a flashable image is two
-commands — `docker-build-all` auto-stages the frozen app, and `make dist` packages the flash-ready
+commands: `docker-build-all` auto-stages the frozen app, and `make dist` packages the flash-ready
 artifacts into `dist/<BOARD>/`:
 
 ```bash
@@ -220,7 +228,7 @@ make dist             BOARD=WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43
 ```
 
 `dist/<BOARD>/` then holds `micropython.bin`, `bootloader/`, `partition_table/`, `vfs.bin` (the baked
-`/main.py` launcher — see below), and the generated `flash_args` manifest that flashes all of them.
+`/main.py` launcher; see below), and the generated `flash_args` manifest that flashes all of them.
 (The raw build tree is also left under `build/<BOARD>/`.)
 
 | Board | Chip |
@@ -228,31 +236,51 @@ make dist             BOARD=WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43
 | `WAVESHARE_ESP32_S3_TOUCH_LCD_35B`, `WAVESHARE_ESP32_S3_TOUCH_LCD_35` | `esp32s3` |
 | `WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_35`, `WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43` | `esp32p4` |
 
+### ESP32-P4 chip revision
+
+ESP32-P4 chips come in two families that cannot share a firmware image: the original v0.x/v1.x
+silicon and the v3.x silicon that boards have shipped with since mid-2026. P4 builds target **v3.x by
+default**. For a board with an older chip, build the `PRE_REV3` variant:
+
+```bash
+make docker-build-all BOARD=WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43 BOARD_VARIANT=PRE_REV3
+make dist             BOARD=WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43 BOARD_VARIANT=PRE_REV3
+```
+
+The variant builds into `build/<BOARD>-PRE_REV3/` and packages into `dist/<BOARD>-PRE_REV3/`, and
+the build fails if the resolved configuration does not target the intended silicon. To check a
+board, run `esptool -p <port> chip-id`; it prints a line such as `Chip type: ESP32-P4 (revision
+v3.2)`. Recent esptool versions also refuse to write a bootloader built for the other family.
+Background and the v3-specific fixes:
+[docs/knowledge/esp32-p4-chip-revision-v3.md](docs/knowledge/esp32-p4-chip-revision-v3.md).
+
 ### Flashing
 
-Flashing runs on your **host**, not in the build container — it needs USB access to the board — so
+Flashing runs on your **host**, not in the build container (it needs USB access to the board), so
 install the host-side Python tools first: `esptool` (the flasher) and `pyserial` (used by the
 `tools/` provisioning scripts). With Python 3:
 
 ```bash
-pip install -r tools/requirements.txt   # or: pip install esptool pyserial
+pip install -r tools/requirements.txt   # or: pip install -U esptool pyserial
 ```
+
+ESP32-P4 v3.x chips need a recent esptool (5.3 or later covers every v3 revision so far).
 
 Flash from `dist/<BOARD>/`, using the generated offsets:
 
 ```bash
 cd dist/WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43
-python -m esptool --chip esp32p4 --port /dev/ttyACM0 write_flash @flash_args
+python -m esptool --chip esp32p4 --port /dev/ttyACM0 write-flash @flash_args
 ```
 
 **Safety:**
 - **Identify the board first.** Serial ports re-enumerate between sessions (especially on a
-  multi-board bench) — run `python -m esptool --port <port> flash_id` and match the chip + flash
+  multi-board bench), so run `python -m esptool --port <port> flash-id` and match the chip + flash
   size before writing, so you don't flash the wrong board.
-- **Never pipe `write_flash`** (e.g. `| head`) — a SIGPIPE mid-write can leave a partially flashed
+- **Never pipe `write-flash`** (e.g. `| head`): a SIGPIPE mid-write can leave a partially flashed
   image.
 
-**Launching the app.** A `dist/` flash **self-boots** — `make dist` bakes a `/main.py` launcher into
+**Launching the app.** A `dist/` flash **self-boots**: `make dist` bakes a `/main.py` launcher into
 `vfs.bin`, which `flash_args` writes into the board's internal filesystem, so a freshly flashed board
 boots straight into the app on first power-up. No extra step is needed.
 
@@ -269,8 +297,8 @@ python3 tools/set_p4_boot_app.py --port /dev/ttyACM0
 
 The workflow supports `workflow_dispatch` with optional inputs:
 
-- `builder_ref` — branch/tag/SHA of this repo to run (default: `main`)
-- `screens_ref` — branch/tag/SHA of `seedsigner-lvgl-screens` to use (default: blank,
+- `builder_ref`: branch/tag/SHA of this repo to run (default: `main`)
+- `screens_ref`: branch/tag/SHA of `seedsigner-lvgl-screens` to use (default: blank,
   meaning the pinned submodule commit)
 
 Use this to test feature branches of either repo without changing default CI behavior.
@@ -283,10 +311,10 @@ To reduce repeated setup work, builds run inside a prebaked base image with:
 - pinned ESP-IDF baseline (tools installed)
 - common host/build dependencies
 
-MicroPython is **not** baked in — it comes from the `deps/micropython/upstream`
+MicroPython is **not** baked in; it comes from the `deps/micropython/upstream`
 submodule (see above), so the image only changes on an ESP-IDF bump.
 
-This image is built and published **manually** (not by a CI job) — see
+This image is built and published **manually** (not by a CI job); see
 [Rebuilding and publishing the base image](README-dev.md#rebuilding-and-publishing-the-base-image)
 in the developer guide.
 

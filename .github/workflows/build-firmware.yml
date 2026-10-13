@@ -91,16 +91,26 @@ jobs:
 
   build:
     needs: [resolve-image-owner, build-packs]
+    # build-packs runs only on push. GitHub skips a job whose dependency was skipped, so
+    # without this every pull request would skip the firmware build and still pass.
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-24.04
     # Build every supported ESP32-P4 board. All three are esp32p4 (RISC-V), so
     # they share the toolchain installed below; only the board definition differs.
     # fail-fast: false so one board's failure doesn't cancel the others' builds.
+    #
+    # The default build targets ESP32-P4 chip revision v3.x, the silicon now shipping.
+    # Older v0.x/v1.x chips cannot run that image, so the release board also gets a
+    # PRE_REV3 variant build for boards bought before the switch.
     strategy:
       fail-fast: false
       matrix:
         include:
           - board: WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43
             artifact: flashable-dist-waveshare-esp32-p4-43
+          - board: WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43
+            variant: PRE_REV3
+            artifact: flashable-dist-waveshare-esp32-p4-43-pre-rev3
           - board: GUITION_JC4880P443
             artifact: flashable-dist-guition-jc4880p443
           - board: WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_35
@@ -115,6 +125,9 @@ jobs:
       # ESP32-P4 is the first-release target; CI builds the P4 boards (RISC-V).
       IDF_TOOLS_TARGETS: esp32p4
       BOARD: ${{ matrix.board }}
+      BOARD_VARIANT: ${{ matrix.variant }}
+      # build/ and dist/ subdir: <BOARD>, or <BOARD>-<VARIANT> for a variant build.
+      BUILD_NAME: ${{ matrix.variant && format('{0}-{1}', matrix.board, matrix.variant) || matrix.board }}
       # ccache: the launcher wiring is already in place -- the base image ships
       # ccache and build_firmware.sh passes IDF_CCACHE_ENABLE=1, which routes the
       # IDF CMake compiler launcher through ccache. What was missing is cross-run
@@ -123,7 +136,9 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: "2G"
     container:
-      image: ghcr.io/${{ needs.resolve-image-owner.outputs.owner_lc }}/seedsigner-micropython-builder-base:latest
+      # Pinned to the ESP-IDF baseline tag (matches ESP_IDF_REF in the Dockerfile), not
+      # :latest, so publishing a new base image never changes what an existing ref builds.
+      image: ghcr.io/${{ needs.resolve-image-owner.outputs.owner_lc }}/seedsigner-micropython-builder-base:idf-v5.5.5
     steps:
       - name: Checkout builder repo
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -162,7 +177,7 @@ jobs:
           test -d /opt/toolchains/esp-idf
           mkdir -p "$IDF_TOOLS_PATH"
           # The base image bakes the esp32s3 toolchain; the P4 (RISC-V) needs the
-          # esp32p4 toolset. install is idempotent — the riscv32-esp-elf compiler
+          # esp32p4 toolset. install is idempotent: the riscv32-esp-elf compiler
           # may already be present (the S3 ULP uses it), but make it explicit.
           python3 "$IDF_PATH/tools/idf_tools.py" install --targets=esp32p4
           python3 "$IDF_PATH/tools/idf_tools.py" install riscv32-esp-elf-gdb
@@ -186,9 +201,9 @@ jobs:
           # at its first contents (0 MB) -- the trap that kept seedsigner-raspi-lvgl
           # cold for weeks. run_attempt keeps re-runs unique too. The prefix
           # restore-key pulls the newest prior cache; PR builds warm from main's.
-          key: ccache-firmware-${{ env.BOARD }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: ccache-firmware-${{ env.BUILD_NAME }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ccache-firmware-${{ env.BOARD }}-
+            ccache-firmware-${{ env.BUILD_NAME }}-
 
       - name: Configure ccache
         # Fail loudly if the base image ever loses the binary: IDF's CMake launcher
@@ -257,7 +272,7 @@ jobs:
           SS_PACKS_DIR="$packs_dir" make dist BOARD="$BOARD"
           # Verify the localized image actually baked: a launcher-only (English) vfs is
           # ~tens of KB; the full pack collection pushes vfs.bin well past 1 MB.
-          vfs="dist/$BOARD/vfs.bin"
+          vfs="dist/$BUILD_NAME/vfs.bin"
           test -f "$vfs"
           sz=$(stat -c%s "$vfs")
           echo "[dist] $vfs = $sz bytes"
@@ -268,4 +283,4 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ matrix.artifact }}
-          path: dist/${{ env.BOARD }}/
+          path: dist/${{ env.BUILD_NAME }}/

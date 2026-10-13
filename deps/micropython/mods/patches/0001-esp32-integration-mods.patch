@@ -94,6 +94,20 @@ index 6c8368ac4..2a6323da7 100644
  
  # ESP System Settings
  # Only on: ESP32, ESP32S3
+diff --git a/ports/esp32/boards/sdkconfig.p4 b/ports/esp32/boards/sdkconfig.p4
+index 042eec40c..936deaf8f 100644
+--- a/ports/esp32/boards/sdkconfig.p4
++++ b/ports/esp32/boards/sdkconfig.p4
+@@ -1,5 +1,7 @@
+-# Select the minimum chip revision to cover all possible boards.
+-CONFIG_ESP32P4_REV_MIN_0=y
++# By default only build for and support ESP32-P4 revisions 3.x and above
++# - Use the 'PRE_REV3' variants to build for earlier revisions
++# - https://docs.espressif.com/projects/esp-idf/en/stable/esp32p4/api-reference/kconfig-reference.html
++CONFIG_ESP32P4_REV_MIN_300=y
+ 
+ # Flash
+ CONFIG_FLASHMODE_QIO=y
 diff --git a/ports/esp32/esp32_common.cmake b/ports/esp32/esp32_common.cmake
 index e3b1b81ca..8447c7307 100644
 --- a/ports/esp32/esp32_common.cmake
@@ -798,10 +812,21 @@ index 0f8bd8446..5077cad37 100644
      { MP_ROM_QSTR(MP_QSTR_readblocks), MP_ROM_PTR(&machine_sdcard_readblocks_obj) },
      { MP_ROM_QSTR(MP_QSTR_writeblocks), MP_ROM_PTR(&machine_sdcard_writeblocks_obj) },
 diff --git a/ports/esp32/main.c b/ports/esp32/main.c
-index 12835f313..72d73323b 100644
+index 12835f313..0451a11b1 100644
 --- a/ports/esp32/main.c
 +++ b/ports/esp32/main.c
-@@ -63,7 +63,12 @@
+@@ -42,6 +42,10 @@
+ #include "esp_log.h"
+ #include "esp_memory_utils.h"
+ #include "esp_psram.h"
++#if CONFIG_IDF_TARGET_ESP32P4 && CONFIG_ESP32P4_REV_MIN_FULL >= 300
++#include "soc/hp_system_reg.h"
++#include "soc/soc.h"
++#endif
+ 
+ #include "py/cstack.h"
+ #include "py/nlr.h"
+@@ -63,7 +67,12 @@
  #include "usb_serial_jtag.h"
  #include "modesp32.h"
  #include "modmachine.h"
@@ -814,6 +839,22 @@ index 12835f313..72d73323b 100644
  
  #if MICROPY_BLUETOOTH_NIMBLE
  #include "extmod/modbluetooth.h"
+@@ -273,6 +282,15 @@ void boardctrl_startup(void) {
+ }
+ 
+ void MICROPY_ESP_IDF_ENTRY(void) {
++    #if CONFIG_IDF_TARGET_ESP32P4 && CONFIG_ESP32P4_REV_MIN_FULL >= 300
++    // ESP32-P4 v3.x can hold a core load or store on the PSRAM path for longer than
++    // the core bus timeout (65535 cycles, the register maximum). The access would
++    // complete, but the timeout turns it into an asynchronous access fault that cannot
++    // be retried. Disable both core bus timeouts now that the scheduler is running.
++    REG_CLR_BIT(HP_SYSTEM_CORE_DBUS_TIMEOUT_REG, HP_SYSTEM_CORE_DBUS_TIMEOUT_EN);
++    REG_CLR_BIT(HP_SYSTEM_CORE_IBUS_TIMEOUT_REG, HP_SYSTEM_CORE_IBUS_TIMEOUT_EN);
++    #endif
++
+     // Hook for a board to run code at start up.
+     // This defaults to initialising NVS and detecting the flash size.
+     MICROPY_BOARD_STARTUP();
 diff --git a/ports/esp32/main/CMakeLists.txt b/ports/esp32/main/CMakeLists.txt
 index 40188abff..6c1f5d855 100644
 --- a/ports/esp32/main/CMakeLists.txt

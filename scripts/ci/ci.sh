@@ -10,6 +10,9 @@ DEPS_DIR="$REPO_ROOT/deps"
 IDF_PATH="${IDF_PATH:-/opt/toolchains/esp-idf}"
 IDF_TOOLS_PATH="${IDF_TOOLS_PATH:-/opt/espressif}"
 BOARD="${BOARD:-WAVESHARE_ESP32_S3_TOUCH_LCD_35B}"
+# Optional board variant (e.g. PRE_REV3 for pre-v3 ESP32-P4 silicon); a variant builds
+# into build/<BOARD>-<VARIANT>/ and packages into dist/<BOARD>-<VARIANT>/.
+BUILD_NAME="$BOARD${BOARD_VARIANT:+-$BOARD_VARIANT}"
 
 COMMAND="${1:-help}"
 shift || true
@@ -55,7 +58,7 @@ case "$COMMAND" in
     ;;
 
   collect-artifacts)
-    BUILD_DIR="$REPO_ROOT/build/$BOARD"
+    BUILD_DIR="$REPO_ROOT/build/$BUILD_NAME"
     mkdir -p out/bootloader out/partition_table out/logs out/screenshots
     cp "$BUILD_DIR/micropython.bin" out/
     cp "$BUILD_DIR/micropython.elf" out/
@@ -119,8 +122,8 @@ case "$COMMAND" in
     export SS_PACKS_DIR="${SS_PACKS_DIR:-$REPO_ROOT/deps/seedsigner/src/lang-packs}"
     make dist BOARD="$BOARD"
     mkdir -p out/dist
-    cp -r "dist/$BOARD" out/dist/
-    echo "[ci] collect-dist: out/dist/$BOARD (flashable, self-booting image)"
+    cp -r "dist/$BUILD_NAME" out/dist/
+    echo "[ci] collect-dist: out/dist/$BUILD_NAME (flashable, self-booting image)"
     ;;
 
   # ---------------------------------------------------------------------------
