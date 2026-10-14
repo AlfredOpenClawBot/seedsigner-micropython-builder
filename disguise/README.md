@@ -10,7 +10,8 @@ launcher is replaced.
 
 ```bash
 pip install mpremote
-cp device/disguise_config.example.json my_config.json   # edit Wi-Fi + lights
+cp device/disguise_config.example.json my_config.json   # edit Wi-Fi + lights,
+                                                         # or build it from Smart Life (below)
 ./install.sh /dev/ttyACM0 my_config.json                 # macOS: /dev/cu.usbmodem…
 ```
 
@@ -33,23 +34,86 @@ rewrite `/main.py` with the stock launcher. Re-run `install.sh` after using them
 Tap a light to toggle it (checked = on). "All lights off" turns everything off.
 States are re-read every 30 s.
 
-## Smart Life (Tuya) devices
+Any light can carry a `"room"`; an optional top-level `"rooms": [...]` sets the
+room order. With lights in two or more rooms, Home lists the rooms instead of the
+lights (the Smart Life import below fills these in for you).
 
-The same plugs you use in the Smart Life app work here, over your home Wi-Fi,
-without the cloud. Each one needs its **device id** and **local key**, which
-Smart Life doesn't show. Get them once on a laptop with
-[tinytuya](https://github.com/jasonacox/tinytuya):
+## Copy your Smart Life setup onto the board
 
-```bash
-pip install tinytuya
-python -m tinytuya wizard   # links a free Tuya IoT developer account to your Smart Life app
-python -m tinytuya scan     # shows each device's IP and protocol version
-```
+`tools/smartlife_import.py` builds `disguise_config.json` from your Smart Life
+account: the home name becomes the title, Home lists your Smart Life rooms in the
+same order, and each room lists its lights by their Smart Life names. Tap a room
+to open it, tap a light to switch it, tap the back arrow to return to Home.
 
-Copy `id`, `key`, IP and version into `disguise_config.json`. Give each plug a
-fixed IP in your router so the config doesn't go stale. If you re-pair a plug in
-Smart Life its local key changes; re-run the wizard. Protocol 3.5 (some 2023+
-devices) is not supported yet.
+Smart Life has no "export" button, and the one thing it hides is each device's
+**local key** (the password the plug uses on your Wi-Fi). The only practical way
+to read it is a **one-time** request to Tuya's cloud from your laptop. After
+that, everything is local: the laptop finds plugs with a LAN scan, and the board
+talks to the plugs directly over your Wi-Fi and never contacts any cloud.
+
+### One-time setup (about 15 minutes)
+
+On your laptop, on the same Wi-Fi as your plugs:
+
+1. `pip install tinytuya mpremote`
+2. Create a free account at [platform.tuya.com](https://platform.tuya.com) and a
+   **Cloud project** (Cloud > Development > Create Cloud Project, development
+   method "Smart Home", pick the data center for your region, e.g. Western America).
+   Note the **Access ID** and **Access Secret**. The free trial of the API
+   service is plenty, since you only need it once.
+3. In that project open **Devices > Link App Account > Add App Account**. A QR code
+   appears. On your iPhone open **Smart Life > Me > scan icon (top right)** and scan
+   it, then confirm. Your Smart Life devices now show in the project.
+4. In an empty folder run `python -m tinytuya wizard`, paste the Access ID and
+   Secret, enter any one device id from step 3, and answer **Y** to the scan
+   question. This writes `devices.json` (names, ids, local keys) and `tinytuya.json`.
+5. In the same folder run the import:
+
+   ```bash
+   python3 /path/to/disguise/tools/smartlife_import.py --ssid "YourWiFi" -o disguise_config.json
+   ```
+
+   It asks for your Wi-Fi password, reads your rooms once, scans the LAN, and
+   prints what it imported and anything it skipped and why.
+6. Install: `./install.sh /dev/cu.usbmodem… /path/to/disguise_config.json`
+
+After step 5 you can unlink the app account in the Tuya project (or delete the
+project) if you want the cloud link gone; the board doesn't need it.
+
+### Later changes
+
+- Renamed or moved a device in Smart Life: `smartlife_import.py --refresh` (asks the
+  cloud again), then `install.sh`.
+- A plug got a new IP: just re-run `smartlife_import.py` (local scan only, no cloud).
+  Better: give each plug a fixed IP in your router.
+- Re-paired a plug in Smart Life: its local key changed; re-run the wizard, then
+  the import.
+- `--offline` forbids any cloud call; `--home NAME` picks one of several homes.
+  Lights you added by hand (Tasmota, Shelly...) and your Wi-Fi are kept on re-runs.
+- `disguise_config.json` holds your Wi-Fi password and device keys; keep it private.
+
+### What comes across, and what doesn't
+
+| Smart Life | Home Control |
+|---|---|
+| Home name | screen title |
+| Rooms and their order | Home list (plus "All devices"), devices without a room go to "Other devices" |
+| Plugs, switches, bulbs (on/off) | a light per switch; a 2-gang switch becomes "Name 1" and "Name 2" |
+| Brightness, colour, scenes, schedules | not yet (on/off only) |
+| Sensors, IR remotes | skipped |
+| Zigbee/Bluetooth devices behind a hub | skipped (they have no IP of their own) |
+| Protocol 3.5 devices (some 2023+ models) | skipped for now |
+
+With only one room (or none), Home is a single list of lights as before.
+
+### No-cloud alternatives
+
+There is no reliable way to read a stock Smart Life device's local key without
+that one cloud request. If you want zero cloud contact ever, the route is to
+replace the plug firmware: many Tuya plugs can be flashed over the air with
+[tuya-cloudcutter](https://github.com/tuya-cloudcutter/tuya-cloudcutter) to
+OpenBeken or similar, or by serial to Tasmota/ESPHome. Those devices then leave
+Smart Life, and you add them here as `tasmota` (or `http`) lights by hand.
 
 ## Important: Wi-Fi in the stock SeedSigner firmware
 
@@ -70,12 +134,15 @@ Tap the empty top-left corner of the Home screen 6 times, each tap within
 LVGL's top layer, and the disguise removes it before SeedSigner starts so it
 can't block SeedSigner's own back arrow. On firmware without
 `secret_hotspot()`, the Home screen falls back to a visible back arrow there.
+Inside a room the corner holds the room's real back arrow, so the hotspot is
+off there and only taps on Home count.
 
 ## Tests (desktop)
 
 ```bash
 python3 tests/test_disguise.py
 python3 tests/test_tuya.py      # needs: pip install cryptography
+python3 tests/test_import.py    # Smart Life import against a fake cloud and LAN scan
 ```
 
 Uses a fake screen module, fake Tasmota/Shelly devices and a simulated
