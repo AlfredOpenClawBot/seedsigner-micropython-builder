@@ -49,7 +49,7 @@ jobs:
     #
     # Gated on push: PRs stay compile-only (no dist packaging), so building packs there
     # would be wasted work. See docs/ci-bake-full-langpacks-todo.md.
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -189,7 +189,7 @@ jobs:
         # freeze). On push to main, stage the app+embit from the pinned deps/
         # submodules so the build below bakes them in and `make dist` can publish a
         # self-booting image. Version comes from deps/seedsigner git via env.
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: ./scripts/ci/ci.sh stage-frozen
 
       - name: Restore ccache
@@ -243,7 +243,7 @@ jobs:
       - name: Download language packs (merge to main only)
         # The collection built by the build-packs job (plain runner). Lands the locale
         # dirs under lang-packs-staging/ for the dist bake below.
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: lang-packs
@@ -256,7 +256,7 @@ jobs:
         # no microSD). The packs come from the build-packs job's artifact; make dist bakes
         # them into the vfs via SS_PACKS_DIR (resolve_packs()). See
         # docs/ci-bake-full-langpacks-todo.md and BUILDER-13.
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: |
           staging="$GITHUB_WORKSPACE/lang-packs-staging"
           # Locate the dir that holds the locale packs (each is <locale>/manifest.json),
@@ -279,7 +279,7 @@ jobs:
           test "$sz" -gt 1000000
 
       - name: Upload flashable dist (merge to main only)
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ${{ matrix.artifact }}
