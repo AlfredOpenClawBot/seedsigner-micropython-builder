@@ -100,5 +100,34 @@ check('All lights off turns everything off', state == {'tasmota': False, 'shelly
 check('wifi.connect is a no-op without network module', wifi.connect('x', 'y') is False)
 events[:] = [*[(100, BACK)] * 6]
 check('offline run unlocks', disguise_app.run() is True)
+# 4) Smart Life rooms: Home lists rooms, rooms list lights, back returns Home
+cfg.clear(); cfg.update({'title': 'My Home', 'rooms': ['Kitchen', 'Porch'], 'switches': [
+    {'name': 'Ceiling', 'type': 'tasmota', 'host': host, 'room': 'Kitchen'},
+    {'name': 'Lamp', 'type': 'shelly2', 'host': host, 'room': 'Porch'},
+    {'name': 'Garage', 'type': 'tasmota', 'host': '127.0.0.1:1'},   # no room
+]})
+state.update(tasmota=False, shelly=False); screens.clear()
+events[:] = [(0, B(1)),                 # open Kitchen
+             (0, B(0)),                 # toggle Ceiling on
+             *[(100, BACK)] * 2,        # back to Home, then 1 secret tap
+             (0, B(2)),                 # open Porch (resets the count)
+             (0, BACK),                 # back to Home
+             *[(100, BACK)] * 6]
+check('rooms run unlocks from Home', disguise_app.run() is True)
+home = screens[0]
+labels = [r['label'] if isinstance(r, dict) else r for r in home['button_list']]
+check('Home lists All devices, rooms in Smart Life order, Other, All off',
+      labels == ['All devices', 'Kitchen', 'Porch', 'Other devices', 'All lights off'])
+check('Kitchen screen lists its light', screens[1]['top_nav']['title'] == 'Kitchen'
+      and screens[1]['button_list'] == ['Ceiling'])
+check('Kitchen light switched on', state['tasmota'] is True and screens[2]['checked_buttons'] == [0])
+check('Home shows Kitchen on-count', screens[3]['button_list'][1]['label'] == 'Kitchen  (1 on)')
+check('Porch tap did not toggle anything', state['shelly'] is False)
+check('back inside a room does not count toward the secret', events == [])
+
+# 5) one room only falls back to the flat list
+groups = disguise_app.group_rooms({}, switches.load({'switches': [
+    {'name': 'a', 'room': 'Kitchen'}, {'name': 'b', 'room': 'Kitchen'}]}))
+check('single room keeps the flat list', groups == [])
 srv.shutdown()
 print('all good')
