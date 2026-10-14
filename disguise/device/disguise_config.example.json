@@ -1,0 +1,40 @@
+{
+  "title": "Home Control",
+  "wifi": {
+    "ssid": "YourWiFi",
+    "password": "your-wifi-password"
+  },
+  "screensaver_ms": 0,
+  "switches": [
+    {
+      "name": "Living Room",
+      "type": "tuya",
+      "host": "192.168.1.40",
+      "device_id": "bf0123456789abcdef",
+      "local_key": "your16charlocalk",
+      "version": 3.3
+    },
+    {
+      "name": "Hallway",
+      "type": "tasmota",
+      "host": "192.168.1.50"
+    },
+    {
+      "name": "Kitchen",
+      "type": "shelly1",
+      "host": "192.168.1.51"
+    },
+    {
+      "name": "Porch",
+      "type": "shelly2",
+      "host": "192.168.1.52",
+      "channel": 0
+    },
+    {
+      "name": "Bedroom",
+      "type": "http",
+      "on_url": "http://192.168.1.53/on",
+      "off_url": "http://192.168.1.53/off"
+    }
+  ]
+}
