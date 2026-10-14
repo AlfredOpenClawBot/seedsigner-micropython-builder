@@ -1026,6 +1026,21 @@ static mp_obj_t mp_seedsigner_lvgl_dismiss_toast(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(seedsigner_lvgl_dismiss_toast_obj, mp_seedsigner_lvgl_dismiss_toast);
 
+// secret_hotspot(enabled, size=100) -> None. Show or remove the Home Control
+// disguise's invisible top-left tap target; taps arrive via poll_for_result() as
+// ('button_selected', 2000, 'secret'). Remove it before starting the app: the top
+// layer outlives screen changes and would swallow taps in that corner.
+static mp_obj_t mp_seedsigner_lvgl_secret_hotspot(size_t n_args, const mp_obj_t *args) {
+    bool enabled = mp_obj_is_true(args[0]);
+    mp_int_t size = n_args > 1 ? mp_obj_get_int(args[1]) : 100;
+    if (size < 1) {
+        size = 1;
+    }
+    dm_set_secret_hotspot(enabled, (int32_t)size);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(seedsigner_lvgl_secret_hotspot_obj, 1, 2, mp_seedsigner_lvgl_secret_hotspot);
+
 static const mp_rom_map_elem_t seedsigner_lvgl_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__seedsigner_lvgl_screens) },
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&seedsigner_lvgl_init_obj) },
@@ -1075,6 +1090,7 @@ static const mp_rom_map_elem_t seedsigner_lvgl_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_donate_screen), MP_ROM_PTR(&seedsigner_lvgl_donate_screen_obj) },
     { MP_ROM_QSTR(MP_QSTR_show_toast), MP_ROM_PTR(&seedsigner_lvgl_show_toast_obj) },
     { MP_ROM_QSTR(MP_QSTR_dismiss_toast), MP_ROM_PTR(&seedsigner_lvgl_dismiss_toast_obj) },
+    { MP_ROM_QSTR(MP_QSTR_secret_hotspot), MP_ROM_PTR(&seedsigner_lvgl_secret_hotspot_obj) },
     { MP_ROM_QSTR(MP_QSTR_main_menu_screen), MP_ROM_PTR(&seedsigner_lvgl_main_menu_screen_obj) },
     { MP_ROM_QSTR(MP_QSTR_opening_splash_screen), MP_ROM_PTR(&seedsigner_lvgl_opening_splash_screen_obj) },
     { MP_ROM_QSTR(MP_QSTR_version_screen), MP_ROM_PTR(&seedsigner_lvgl_version_screen_obj) },

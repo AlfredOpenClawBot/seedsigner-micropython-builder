@@ -386,6 +386,39 @@ extern "C" void dm_dismiss_toast(void)
     lvgl_port_unlock();
 }
 
+/* Home Control disguise: an invisible tap target in the top-left corner. It lives
+ * on the top layer so it sits above whichever screen is live, and each tap posts
+ * DM_SECRET_HOTSPOT_RET through the normal result queue. The top layer persists
+ * across screens, so the caller must disable it before handing off to the app. */
+static lv_obj_t *s_secret_hotspot = NULL;
+
+static void secret_hotspot_clicked(lv_event_t *e)
+{
+    (void)e;
+    seedsigner_lvgl_on_button_selected(DM_SECRET_HOTSPOT_RET, "secret");
+}
+
+extern "C" void dm_set_secret_hotspot(bool enabled, int32_t size)
+{
+    if (!lvgl_port_lock(0)) {
+        ESP_LOGE(TAG, "dm_set_secret_hotspot: display lock unavailable");
+        return;
+    }
+    if (enabled && s_secret_hotspot == NULL) {
+        s_secret_hotspot = lv_obj_create(lv_layer_top());
+        lv_obj_remove_style_all(s_secret_hotspot);  // fully transparent, no border
+        lv_obj_set_pos(s_secret_hotspot, 0, 0);
+        lv_obj_set_size(s_secret_hotspot, size, size);
+        lv_obj_add_flag(s_secret_hotspot, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_remove_flag(s_secret_hotspot, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_event_cb(s_secret_hotspot, secret_hotspot_clicked, LV_EVENT_CLICKED, NULL);
+    } else if (!enabled && s_secret_hotspot != NULL) {
+        lv_obj_delete(s_secret_hotspot);
+        s_secret_hotspot = NULL;
+    }
+    lvgl_port_unlock();
+}
+
 /* Memory instrumentation for the font-memory budget work (font-memory-plan.md,
  * Task D). The binding builds a dict from this plain-C struct; the lvgl.h /
  * esp_heap_caps.h dependency stays here rather than leaking into the bindings'

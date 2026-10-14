@@ -82,6 +82,13 @@ void dm_show_toast(const char *label_text, const char *icon_glyph,
                    uint32_t outline_color, uint32_t font_color, uint32_t duration_ms);
 void dm_dismiss_toast(void);
 
+/* Home Control disguise hotspot: an invisible size x size px tap target at the
+ * top-left of the top layer. Each tap is reported by poll_for_result() as a
+ * button_selected event with index DM_SECRET_HOTSPOT_RET. Enabling twice or
+ * disabling when off is a no-op. Takes the LVGL-port lock. */
+#define DM_SECRET_HOTSPOT_RET 2000u
+void dm_set_secret_hotspot(bool enabled, int32_t size);
+
 /* Memory instrumentation (docs/font-memory-plan.md, Task D). A plain-C snapshot
  * of the internal LVGL builtin pool and the ESP-IDF PSRAM/internal heaps, kept
  * free of lvgl.h / esp_heap_caps.h types so the MicroPython binding can consume
