@@ -16,7 +16,7 @@ if [ -z "$IDF_DIR" ]; then
   fi
 fi
 
-BOARD="${BOARD:-WAVESHARE_ESP32_S3_TOUCH_LCD_35B}"
+BOARD="${BOARD:-WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43}"
 # Optional MicroPython board variant (the board's mpconfigvariant_<VARIANT>.cmake).
 # ESP32-P4 boards use it to pick the silicon family: the default build targets chip
 # revision v3.x, and BOARD_VARIANT=PRE_REV3 targets the older v0.x/v1.x chips. The two
@@ -127,11 +127,7 @@ MICROPY_CMAKE_ARGS="$MICROPY_CMAKE_ARGS -DSEEDSIGNER_LVGL_SCREENS_DIR=$SCREENS_D
 BOARD_COMMON_DIR="$PORTS_ESP32_DIR/board_common"
 if [ -z "${BOARD_CONFIG_DIR:-}" ]; then
   case "$BOARD" in
-    WAVESHARE_ESP32_S3_TOUCH_LCD_35B) BOARD_CONFIG_DIR="$BOARD_COMMON_DIR/boards/waveshare_s3_lcd35b" ;;
-    WAVESHARE_ESP32_S3_TOUCH_LCD_35)  BOARD_CONFIG_DIR="$BOARD_COMMON_DIR/boards/waveshare_s3_lcd35" ;;
-    WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_35) BOARD_CONFIG_DIR="$BOARD_COMMON_DIR/boards/waveshare_p4_lcd35" ;;
     WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43) BOARD_CONFIG_DIR="$BOARD_COMMON_DIR/boards/waveshare_p4_lcd43" ;;
-    GUITION_JC4880P443) BOARD_CONFIG_DIR="$BOARD_COMMON_DIR/boards/guition_jc4880p443" ;;
     *) echo "WARNING: No board_common mapping for BOARD=$BOARD"; BOARD_CONFIG_DIR="" ;;
   esac
 fi
@@ -150,7 +146,6 @@ fi
 if [ -z "${SEEDSIGNER_DISPLAY_HEIGHT:-}" ]; then
   case "$BOARD" in
     WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43) SEEDSIGNER_DISPLAY_HEIGHT=480 ;;
-    GUITION_JC4880P443) SEEDSIGNER_DISPLAY_HEIGHT=480 ;;
     *) SEEDSIGNER_DISPLAY_HEIGHT=320 ;;
   esac
 fi
@@ -261,7 +256,6 @@ fi
   # Detect chip type from board name
   case "$BOARD" in
     *ESP32_P4*)         CHIP_TYPE="esp32p4" ;;
-    GUITION_JC4880P443) CHIP_TYPE="esp32p4" ;;
     *)                  CHIP_TYPE="esp32s3" ;;
   esac
   echo "  Flash with: python -m esptool --chip $CHIP_TYPE write_flash @flash_args"

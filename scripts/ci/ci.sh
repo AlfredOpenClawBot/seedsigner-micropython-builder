@@ -9,7 +9,7 @@ cd "$REPO_ROOT"
 DEPS_DIR="$REPO_ROOT/deps"
 IDF_PATH="${IDF_PATH:-/opt/toolchains/esp-idf}"
 IDF_TOOLS_PATH="${IDF_TOOLS_PATH:-/opt/espressif}"
-BOARD="${BOARD:-WAVESHARE_ESP32_S3_TOUCH_LCD_35B}"
+BOARD="${BOARD:-WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43}"
 # Optional board variant (e.g. PRE_REV3 for pre-v3 ESP32-P4 silicon); a variant builds
 # into build/<BOARD>-<VARIANT>/ and packages into dist/<BOARD>-<VARIANT>/.
 BUILD_NAME="$BOARD${BOARD_VARIANT:+-$BOARD_VARIANT}"

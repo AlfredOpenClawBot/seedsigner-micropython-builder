@@ -38,7 +38,7 @@ docker-build-all: stage-app
 
 # Package flash-ready binaries into dist/<BOARD>/ for easy flashing.
 # Requires a prior docker-build-all (or BOARD= docker-build-all) to produce artifacts.
-BOARD ?= WAVESHARE_ESP32_S3_TOUCH_LCD_35B
+BOARD ?= WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43
 # BOARD_VARIANT selects a MicroPython board variant. ESP32-P4 boards build for chip
 # revision v3.x by default; BOARD_VARIANT=PRE_REV3 builds for the older v0.x/v1.x
 # silicon. A variant builds into build/<BOARD>-<VARIANT>/ and packages into

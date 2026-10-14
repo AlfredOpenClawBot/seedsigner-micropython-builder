@@ -108,13 +108,6 @@ jobs:
         include:
           - board: WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43
             artifact: flashable-dist-waveshare-esp32-p4-43
-          - board: WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_43
-            variant: PRE_REV3
-            artifact: flashable-dist-waveshare-esp32-p4-43-pre-rev3
-          - board: GUITION_JC4880P443
-            artifact: flashable-dist-guition-jc4880p443
-          - board: WAVESHARE_ESP32_P4_WIFI6_TOUCH_LCD_35
-            artifact: flashable-dist-waveshare-esp32-p4-35
     defaults:
       run:
         shell: bash
