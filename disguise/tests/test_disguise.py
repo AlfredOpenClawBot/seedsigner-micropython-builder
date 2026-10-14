@@ -25,6 +25,8 @@ screens = []
 toasts = []
 ui = types.ModuleType('seedsigner_lvgl_screens')
 ui.init = lambda: None
+covers = []
+ui.loading_spinner_screen = lambda cfg: covers.append(cfg['text'])
 ui.set_screensaver_timeout = lambda ms: None
 ui.clear_result_queue = lambda: None
 ui.button_list_screen = lambda cfg: screens.append(cfg)
@@ -81,6 +83,7 @@ events[:] = [(0, B(0)), (0, B(1)), (0, B(2)),
              *[(200, BACK)] * 4, (0, B(0)),              # 5 in a row, then other input resets
              *[(300, BACK)] * 6]
 check('run() unlocks on 6 quick top-left taps', disguise_app.run() is True)
+check('HOME CONTROL cover shown before Home', covers[:1] == ['HOME CONTROL'])
 check('Tasmota light switched on', screens[1]['checked_buttons'] == [0])
 check('Shelly light switched on', state['shelly'] is True)
 check('dead switch shows a toast', any('Garage' in t for t in toasts))
@@ -100,7 +103,19 @@ check('All lights off turns everything off', state == {'tasmota': False, 'shelly
 check('wifi.connect is a no-op without network module', wifi.connect('x', 'y') is False)
 events[:] = [*[(100, BACK)] * 6]
 check('offline run unlocks', disguise_app.run() is True)
-# 4) Smart Life rooms: Home lists rooms, rooms list lights, back returns Home
+# 4) firmware with the invisible hotspot: no back arrow, hidden taps unlock
+hotspot = []
+ui.secret_hotspot = lambda on, size=100: hotspot.append(on)
+SECRET = ('button_selected', 2000, 'secret')
+screens.clear()
+events[:] = [*[(100, SECRET)] * 5, (0, B(0)), *[(100, SECRET)] * 6]
+check('hidden-tap run unlocks', disguise_app.run() is True and events == [])
+check('home has no back arrow with hotspot', screens[0]['top_nav']['show_back_button'] is False)
+disguise_app.shutdown()
+check('hotspot on at start, off at shutdown', hotspot == [True, False])
+del ui.secret_hotspot
+
+# 5) Smart Life rooms: Home lists rooms, rooms list lights, back returns Home
 cfg.clear(); cfg.update({'title': 'My Home', 'rooms': ['Kitchen', 'Porch'], 'switches': [
     {'name': 'Ceiling', 'type': 'tasmota', 'host': host, 'room': 'Kitchen'},
     {'name': 'Lamp', 'type': 'shelly2', 'host': host, 'room': 'Porch'},
@@ -125,9 +140,25 @@ check('Home shows Kitchen on-count', screens[3]['button_list'][1]['label'] == 'K
 check('Porch tap did not toggle anything', state['shelly'] is False)
 check('back inside a room does not count toward the secret', events == [])
 
-# 5) one room only falls back to the flat list
+# 6) one room only falls back to the flat list
 groups = disguise_app.group_rooms({}, switches.load({'switches': [
     {'name': 'a', 'room': 'Kitchen'}, {'name': 'b', 'room': 'Kitchen'}]}))
 check('single room keeps the flat list', groups == [])
+
+# 7) rooms with the hotspot: off inside a room, back on at Home; only Home counts
+hotspot.clear()
+ui.secret_hotspot = lambda on, size=100: hotspot.append(on)
+screens.clear()
+events[:] = [(0, B(1)),                 # open Kitchen
+             *[(100, SECRET)] * 5,      # stray hidden taps in a room are ignored
+             (0, BACK),                 # real back arrow -> Home
+             *[(100, SECRET)] * 6]
+check('rooms + hotspot run unlocks', disguise_app.run() is True and events == [])
+check('Home hides the back arrow', screens[0]['top_nav']['show_back_button'] is False)
+check('room shows its back arrow', screens[1]['top_nav']['show_back_button'] is True)
+check('hotspot off in the room, on again at Home', hotspot == [True, False, True])
+check('Home after the room still hides the back arrow',
+      screens[-1]['top_nav']['show_back_button'] is False)
+disguise_app.shutdown()
 srv.shutdown()
 print('all good')

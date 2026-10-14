@@ -3,8 +3,11 @@
 # Home screen: one row per light (checked = on); tapping a row toggles it.
 # When the lights carry Smart Life rooms (see tools/smartlife_import.py), Home
 # lists "All devices" and each room instead, and a room lists its lights.
-# Secret: tap the top-left corner (the back chevron) 6 times quickly and run()
-# returns True, which tells main.py to start SeedSigner.
+# Secret: tap the empty top-left corner of Home 6 times quickly and run() returns
+# True, which tells main.py to start SeedSigner. Firmware with ui.secret_hotspot()
+# makes that corner an invisible tap target; older firmware falls back to a
+# visible back arrow there. Room screens show a real back arrow in that corner,
+# so the hotspot is off while a room is open.
 import json
 import time
 
@@ -16,10 +19,13 @@ import wifi
 CONFIG_PATH = '/disguise_config.json'
 
 RET_BACK = 1000          # SEEDSIGNER_RET_BACK_BUTTON (top-left chevron)
+RET_SECRET = 2000        # DM_SECRET_HOTSPOT_RET (invisible top-left tap target)
+HOTSPOT_PX = 100
 SECRET_TAPS = 6
 SECRET_GAP_MS = 1500     # max pause between secret taps
 REFRESH_MS = 30000       # re-read switch states while idle
 ALL_OFF_LABEL = 'All lights off'
+BOOT_COVER_TEXT = 'HOME CONTROL'
 ALL_DEVICES_LABEL = 'All devices'
 OTHER_ROOM = 'Other devices'
 ICON_CHEVRON_RIGHT = '\ue90a'   # SeedSignerIconConstants::CHEVRON_RIGHT
@@ -31,6 +37,7 @@ DEFAULT_CONFIG = {
 }
 
 _switches = []
+_hotspot = False
 
 
 def load_config(path=CONFIG_PATH):
@@ -69,7 +76,7 @@ def _render(title, sw):
     else:
         labels.append('No devices yet')
     _show({
-        'top_nav': {'title': title, 'show_back_button': True, 'show_power_button': False},
+        'top_nav': {'title': title, 'show_back_button': not _hotspot, 'show_power_button': False},
         'button_list': labels,
         'button_style': 'checkbox',
         'checked_buttons': checked,
@@ -106,7 +113,7 @@ def _render_home(title, sw, groups):
         rows.append({'label': label, 'right_icon': ICON_CHEVRON_RIGHT})
     rows.append(ALL_OFF_LABEL)
     _show({
-        'top_nav': {'title': title, 'show_back_button': True, 'show_power_button': False},
+        'top_nav': {'title': title, 'show_back_button': not _hotspot, 'show_power_button': False},
         'button_list': rows,
     })
     return ('home', tuple(_checked(sw, range(len(sw)))))
@@ -149,12 +156,14 @@ class SecretCounter:
 
 def run():
     """Run the disguise until the secret is entered. Returns True to unlock."""
-    global _switches
+    global _switches, _hotspot
     cfg = load_config()
     title = cfg.get('title') or 'Home Control'
 
     ui.init()
+    _boot_cover()
     ui.set_screensaver_timeout(int(cfg.get('screensaver_ms', 0)))
+    _hotspot = _set_hotspot(True)
 
     _switches = switches.load(cfg)
     w = cfg.get('wifi') or {}
@@ -185,7 +194,7 @@ def run():
             continue
 
         _kind, index, _label = ev
-        if index == RET_BACK:
+        if index in (RET_BACK, RET_SECRET):
             if secret.tap(now):
                 return True
             continue
@@ -204,7 +213,9 @@ def run():
 
 def _run_rooms(title, groups, online):
     """Smart Life style: Home lists rooms, a room lists its lights."""
+    global _hotspot
     sw = _switches
+    has_hotspot = _hotspot
     views = [(ALL_DEVICES_LABEL, list(range(len(sw))))] + groups
     room = None                    # None = Home, else index into views
 
@@ -234,20 +245,26 @@ def _run_rooms(title, groups, online):
 
         _kind, index, _label = ev
         if room is None:
-            if index == RET_BACK:
+            if index in (RET_BACK, RET_SECRET):
                 if secret.tap(now):
                     return True
                 continue
             secret.reset()
             if index < len(views):
                 room = index
+                if has_hotspot:        # the room's back arrow takes the corner
+                    _hotspot = _set_hotspot(False)
             elif sw:
                 failed = [s.name for s in sw if not s.set(False)]
                 if failed:
                     _toast('%d light(s) not responding' % len(failed))
         else:
+            if index == RET_SECRET:
+                continue               # the secret only counts on Home
             if index == RET_BACK:
                 room = None
+                if has_hotspot:
+                    _hotspot = _set_hotspot(True)
             else:
                 idx = views[room][1]
                 if index < len(idx):
@@ -262,9 +279,30 @@ def _state(room, views, sw):
     return tuple(_checked(sw, idx))
 
 
+def _boot_cover():
+    """Cover the gap between boot and Home (Wi-Fi join, first state read)."""
+    try:
+        ui.loading_spinner_screen({'text': BOOT_COVER_TEXT})
+    except Exception:
+        pass
+
+
+def _set_hotspot(on):
+    """Toggle the invisible tap target. Returns False on firmware without it."""
+    try:
+        ui.secret_hotspot(on, HOTSPOT_PX)
+        return on
+    except AttributeError:
+        return False
+
+
 def shutdown():
     """Release everything the disguise holds before SeedSigner starts."""
-    global _switches
+    global _switches, _hotspot
+    # The hotspot sits on LVGL's top layer, which outlives screen changes: remove
+    # it or it would swallow taps in SeedSigner's top-left corner (its back arrow).
+    _set_hotspot(False)
+    _hotspot = False
     _switches = []
     wifi.shutdown()
     try:

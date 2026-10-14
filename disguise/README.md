@@ -1,7 +1,7 @@
 # SmartHome disguise for SeedSigner (ESP32-P4-WiFi6-Touch-LCD-4.3)
 
-The board boots into a "Home" light controller. Tap the **top-left corner
-(the small back arrow) 6 times quickly** and SeedSigner starts. When
+The board boots into a "Home" light controller. Tap the **empty top-left
+corner 6 times quickly** and SeedSigner starts. When
 SeedSigner exits, crashes, or the board loses power, it comes back up as the
 Home controller. No SeedSigner code is changed: only the board's `/main.py`
 launcher is replaced.
@@ -128,9 +128,12 @@ normally includes.
 
 ## How the secret works
 
-The Home screen is SeedSigner's own native `button_list_screen` with the back
-arrow shown in the top-left. The disguise counts back-arrow taps: 6 in a row,
-each within 1.5 s of the last, unlocks. Any other tap resets the count.
+Tap the empty top-left corner of the Home screen 6 times, each tap within
+1.5 s of the last; any other tap resets the count. The firmware's
+`secret_hotspot()` makes that 100x100 px corner an invisible tap target on
+LVGL's top layer, and the disguise removes it before SeedSigner starts so it
+can't block SeedSigner's own back arrow. On firmware without
+`secret_hotspot()`, the Home screen falls back to a visible back arrow there.
 
 ## Tests (desktop)
 
