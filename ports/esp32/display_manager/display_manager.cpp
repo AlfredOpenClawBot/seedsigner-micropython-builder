@@ -165,6 +165,22 @@ extern "C" void init(void)
  */
 extern "C" void boardctrl_startup(void);  /* original NVS/flash init */
 
+/* Disguise boot frame: plain "HOME CONTROL" text on black, in place of the
+ * SeedSigner boot logo. */
+static void home_control_boot_screen(void *ctx)
+{
+    (void)ctx;
+    lv_obj_t *scr = lv_screen_active();
+    lv_obj_clean(scr);
+    lv_obj_set_style_bg_color(scr, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_t *label = lv_label_create(scr);
+    lv_label_set_text(label, "HOME CONTROL");
+    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_30, LV_PART_MAIN);
+    lv_obj_center(label);
+}
+
 extern "C" void seedsigner_board_startup(void)
 {
     boardctrl_startup();
@@ -188,7 +204,7 @@ extern "C" void seedsigner_board_startup(void)
      * fully replaces the earlier black / "device ready" frame. run_screen takes
      * the LVGL lock and swallows exceptions. */
     if (lvgl_disp) {
-        run_screen(opening_splash_screen, (void *)"{\"boot_logo_only\": true}");
+        run_screen(home_control_boot_screen, NULL);
     }
     /* Give LVGL time to flush the boot-logo frame before the backlight turns on. */
     vTaskDelay(pdMS_TO_TICKS(100));
