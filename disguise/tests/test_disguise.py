@@ -100,5 +100,15 @@ check('All lights off turns everything off', state == {'tasmota': False, 'shelly
 check('wifi.connect is a no-op without network module', wifi.connect('x', 'y') is False)
 events[:] = [*[(100, BACK)] * 6]
 check('offline run unlocks', disguise_app.run() is True)
+# 4) firmware with the invisible hotspot: no back arrow, hidden taps unlock
+hotspot = []
+ui.secret_hotspot = lambda on, size=100: hotspot.append(on)
+SECRET = ('button_selected', 2000, 'secret')
+screens.clear()
+events[:] = [*[(100, SECRET)] * 5, (0, B(0)), *[(100, SECRET)] * 6]
+check('hidden-tap run unlocks', disguise_app.run() is True and events == [])
+check('home has no back arrow with hotspot', screens[0]['top_nav']['show_back_button'] is False)
+disguise_app.shutdown()
+check('hotspot on at start, off at shutdown', hotspot == [True, False])
 srv.shutdown()
 print('all good')

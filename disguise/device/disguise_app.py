@@ -1,8 +1,10 @@
 # Smart-home controller "disguise" shown at every boot.
 #
 # Home screen: one row per light (checked = on); tapping a row toggles it.
-# Secret: tap the top-left corner (the back chevron) 6 times quickly and run()
-# returns True, which tells main.py to start SeedSigner.
+# Secret: tap the empty top-left corner 6 times quickly and run() returns True,
+# which tells main.py to start SeedSigner. Firmware with ui.secret_hotspot()
+# makes that corner an invisible tap target; older firmware falls back to a
+# visible back arrow there.
 import json
 import time
 
@@ -14,6 +16,8 @@ import wifi
 CONFIG_PATH = '/disguise_config.json'
 
 RET_BACK = 1000          # SEEDSIGNER_RET_BACK_BUTTON (top-left chevron)
+RET_SECRET = 2000        # DM_SECRET_HOTSPOT_RET (invisible top-left tap target)
+HOTSPOT_PX = 100
 SECRET_TAPS = 6
 SECRET_GAP_MS = 1500     # max pause between secret taps
 REFRESH_MS = 30000       # re-read switch states while idle
@@ -26,6 +30,7 @@ DEFAULT_CONFIG = {
 }
 
 _switches = []
+_hotspot = False
 
 
 def load_config(path=CONFIG_PATH):
@@ -56,7 +61,7 @@ def _render(title, sw):
         labels.append('No devices yet')
     ui.clear_result_queue()
     ui.button_list_screen({
-        'top_nav': {'title': title, 'show_back_button': True, 'show_power_button': False},
+        'top_nav': {'title': title, 'show_back_button': not _hotspot, 'show_power_button': False},
         'button_list': labels,
         'button_style': 'checkbox',
         'checked_buttons': checked,
@@ -90,12 +95,13 @@ class SecretCounter:
 
 def run():
     """Run the disguise until the secret is entered. Returns True to unlock."""
-    global _switches
+    global _switches, _hotspot
     cfg = load_config()
     title = cfg.get('title') or 'Home Control'
 
     ui.init()
     ui.set_screensaver_timeout(int(cfg.get('screensaver_ms', 0)))
+    _hotspot = _set_hotspot(True)
 
     _switches = switches.load(cfg)
     w = cfg.get('wifi') or {}
@@ -122,7 +128,7 @@ def run():
             continue
 
         _kind, index, _label = ev
-        if index == RET_BACK:
+        if index in (RET_BACK, RET_SECRET):
             if secret.tap(now):
                 return True
             continue
@@ -139,9 +145,22 @@ def run():
         shown = _render(title, _switches)
 
 
+def _set_hotspot(on):
+    """Toggle the invisible tap target. Returns False on firmware without it."""
+    try:
+        ui.secret_hotspot(on, HOTSPOT_PX)
+        return on
+    except AttributeError:
+        return False
+
+
 def shutdown():
     """Release everything the disguise holds before SeedSigner starts."""
-    global _switches
+    global _switches, _hotspot
+    # The hotspot sits on LVGL's top layer, which outlives screen changes: remove
+    # it or it would swallow taps in SeedSigner's top-left corner (its back arrow).
+    _set_hotspot(False)
+    _hotspot = False
     _switches = []
     wifi.shutdown()
     try:
