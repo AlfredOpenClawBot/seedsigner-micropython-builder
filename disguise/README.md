@@ -134,6 +134,8 @@ Tap the empty top-left corner of the Home screen 6 times, each tap within
 LVGL's top layer, and the disguise removes it before SeedSigner starts so it
 can't block SeedSigner's own back arrow. On firmware without
 `secret_hotspot()`, the Home screen falls back to a visible back arrow there.
+Inside a room the corner holds the room's real back arrow, so the hotspot is
+off there and only taps on Home count.
 
 ## Tests (desktop)
 
